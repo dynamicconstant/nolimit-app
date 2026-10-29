@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0E1016">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="No Limit">
+<title>No Limit</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="boot-card">
+    <h1>No Limit</h1>
+    <p id="boot-msg">Loading the poker engine…</p>
+    <div class="boot-bar"><div id="boot-fill"></div></div>
+    <p class="boot-note">The first load fetches about 14 MB. After that the app opens with no network.</p>
+  </div>
+</div>
+
+<!-- ============================================================ Play: lobby -->
+<main id="lobby" class="view" hidden>
+  <header class="lobby-head">
+    <h1>No Limit</h1>
+    <p>Sit down against the competition bot. Same rules as the regionals: 2,000 chips, blinds from 10/20, rising every 25 hands. Every hand you play is scored and saved.</p>
+  </header>
+
+  <div class="resume" id="resume" hidden>
+    <button class="choice choice-resume" id="resume-btn" type="button">
+      <span class="choice-title">Resume your game</span>
+      <span class="choice-sub" id="resume-sub"></span>
+    </button>
+  </div>
+
+  <div class="choices">
+    <button class="choice" type="button" data-mode="heads-up">
+      <span class="choice-title">Heads-up</span>
+      <span class="choice-sub">You against the bot, one on one</span>
+    </button>
+    <button class="choice" type="button" data-mode="table">
+      <span class="choice-title">Full table</span>
+      <span class="choice-sub">You, the bot, a maniac and five practice bots</span>
+    </button>
+    <button class="choice choice-maniac" type="button" data-mode="maniac">
+      <span class="choice-title">Maniac</span>
+      <span class="choice-sub">Heads-up against a bot that raises everything</span>
+    </button>
+  </div>
+
+  <details class="advanced">
+    <summary>Choose opponents, seed and stack</summary>
+    <p class="hint">Tap to add a player to your table (up to 7). Leave empty to use the defaults.</p>
+    <div class="chips" id="bot-chips"></div>
+    <div class="picked" id="picked" aria-live="polite"></div>
+    <div class="fields">
+      <label>Seed <input id="seed" inputmode="numeric" pattern="[0-9]*" placeholder="random"></label>
+      <label>Starting stack <input id="stack" inputmode="numeric" pattern="[0-9]*" value="2000"></label>
+    </div>
+    <button class="btn-brass wide" id="custom-start" type="button">Start with these players</button>
+  </details>
+  <p class="lobby-error" id="lobby-error" role="alert"></p>
+</main>
+
+<!-- ============================================================ Play: table -->
+<main id="table" class="view" hidden>
+  <header class="bar-top">
+    <div class="status" id="status"></div>
+    <div class="top-actions">
+      <button class="icon-btn" id="log-btn" type="button" aria-label="This hand's actions">Log</button>
+      <button class="icon-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false">Menu</button>
+    </div>
+  </header>
+  <div class="menu" id="menu" hidden>
+    <label class="toggle"><input type="checkbox" id="instant"> Instant bot moves</label>
+    <label class="toggle"><input type="checkbox" id="reveal"> Show everyone's cards after each hand</label>
+    <button type="button" id="leave">Leave table</button>
+  </div>
+
+  <section class="felt-wrap" aria-label="Table">
+    <div class="felt" id="felt">
+      <div class="center">
+        <div class="board" id="board"></div>
+        <div class="pot" id="pot"></div>
+      </div>
+    </div>
+    <div class="seats" id="seats"></div>
+  </section>
+
+  <section class="hero" id="hero">
+    <div class="hero-bet" id="hero-bet"></div>
+    <div class="hole" id="hole"></div>
+    <div class="hero-stack" id="hero-stack"></div>
+    <div class="odds" id="odds"></div>
+  </section>
+
+  <section class="controls" id="controls">
+    <div class="drawer" id="drawer" hidden>
+      <div class="presets" id="presets"></div>
+      <div class="slider-row">
+        <input type="range" id="slider" aria-label="Raise amount">
+        <output id="slider-out"></output>
+      </div>
+      <button class="btn-brass wide" id="confirm" type="button"></button>
+    </div>
+    <div class="actions" id="actions">
+      <button class="act act-fold" id="btn-fold" type="button"><span class="fill"></span><span class="lbl">Fold</span></button>
+      <button class="act act-call" id="btn-call" type="button"><span class="lbl">Check</span><span class="amt"></span></button>
+      <button class="act act-raise" id="btn-raise" type="button"><span class="lbl">Bet</span></button>
+    </div>
+    <div class="waiting" id="waiting" aria-live="polite"></div>
+  </section>
+
+  <div class="sheet sheet-result" id="result" hidden role="dialog" aria-label="Hand result">
+    <div class="sheet-scroll">
+      <div class="sheet-body" id="result-body"></div>
+    </div>
+    <button class="btn-brass wide" id="result-next" type="button">Next hand</button>
+  </div>
+
+  <div class="sheet sheet-log" id="log" hidden role="dialog" aria-label="This hand's actions">
+    <div class="sheet-body">
+      <h2>This hand</h2>
+      <ol id="log-list"></ol>
+      <button class="btn-quiet wide" id="log-close" type="button">Close</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ Play: standings -->
+<main id="standings" class="view" hidden>
+  <header class="lobby-head">
+    <h1 id="standings-title">Game over</h1>
+    <p id="standings-sub"></p>
+  </header>
+  <div class="session-score" id="session-score"></div>
+  <ol class="places" id="places"></ol>
+  <div class="end-actions">
+    <button class="btn-brass wide" id="review-session" type="button">Review this session</button>
+    <button class="btn-quiet wide" id="rematch" type="button">Play again with the same cards</button>
+    <button class="btn-quiet wide" id="to-lobby" type="button">New game</button>
+  </div>
+</main>
+
+<!-- ============================================================ Sessions -->
+<main id="sessions" class="view page" hidden>
+  <header class="page-head"><h1>Sessions</h1><p>Every game you played against the bots, with each decision scored.</p></header>
+  <div id="sessions-list"></div>
+</main>
+<main id="session" class="view page" hidden>
+  <header class="page-head">
+    <button class="back" id="session-back" type="button">‹ Sessions</button>
+    <h1 id="session-title"></h1><p id="session-sub"></p>
+  </header>
+  <div id="session-summary"></div>
+  <div id="session-hands"></div>
+</main>
+<main id="handview" class="view page" hidden>
+  <header class="page-head">
+    <button class="back" id="hand-back" type="button">‹ Back</button>
+    <h1 id="hand-title"></h1><p id="hand-sub"></p>
+  </header>
+  <div id="hand-body"></div>
+</main>
+
+<!-- ============================================================ Home games -->
+<main id="home" class="view page" hidden>
+  <header class="page-head"><h1>Home games</h1><p>Track your results with friends and get your hands analyzed.</p></header>
+  <div class="segmented" role="tablist">
+    <button type="button" role="tab" data-tab="results" aria-selected="true">Results</button>
+    <button type="button" role="tab" data-tab="hands" aria-selected="false">Hands</button>
+  </div>
+  <section id="home-results">
+    <div class="tiles" id="home-tiles"></div>
+    <div class="chart-wrap" id="home-chart"></div>
+    <button class="btn-brass wide" id="add-result" type="button">Add a session result</button>
+    <div id="home-list"></div>
+  </section>
+  <section id="home-hands" hidden>
+    <button class="btn-brass wide" id="add-hand" type="button">Record a hand</button>
+    <div id="homehands-list"></div>
+  </section>
+</main>
+<main id="result-form" class="view page" hidden>
+  <header class="page-head"><button class="back" id="result-form-back" type="button">‹ Home games</button><h1>Session result</h1></header>
+  <form id="result-form-el" class="form">
+    <label>Date <input type="date" name="date" required></label>
+    <label>Game <input name="venue" placeholder="Friday game at Sam's" required></label>
+    <div class="fields">
+      <label>Buy-in (total) <input name="buyin" inputmode="decimal" placeholder="100" required></label>
+      <label>Cash-out <input name="cashout" inputmode="decimal" placeholder="160" required></label>
+    </div>
+    <div class="fields">
+      <label>Hours <input name="hours" inputmode="decimal" placeholder="4"></label>
+      <label>Stakes <input name="stakes" placeholder="0.25/0.50"></label>
+    </div>
+    <label>Notes <textarea name="notes" rows="3" placeholder="How it went, who played, what you want to fix"></textarea></label>
+    <button class="btn-brass wide" type="submit">Save result</button>
+    <button class="btn-danger wide" type="button" id="result-delete" hidden>Delete this result</button>
+  </form>
+</main>
+<main id="hand-form" class="view page" hidden>
+  <header class="page-head"><button class="back" id="hand-form-back" type="button">‹ Home games</button><h1>Record a hand</h1>
+    <p>Enter what happened and get every decision scored. Seats go clockwise from the dealer.</p></header>
+  <div id="hand-form-el"></div>
+</main>
+
+<!-- ============================================================ More -->
+<main id="more" class="view page" hidden>
+  <header class="page-head"><h1>More</h1></header>
+  <section class="settings">
+    <label class="toggle"><input type="checkbox" id="set-reveal"> Show everyone's cards after each hand</label>
+    <label class="toggle"><input type="checkbox" id="set-instant"> Instant bot moves</label>
+  </section>
+  <section class="settings">
+    <h2>Backup</h2>
+    <p class="hint">Everything is stored on this phone only. Export a backup before clearing the browser or switching phones.</p>
+    <button class="btn-quiet wide" id="export" type="button">Export backup</button>
+    <label class="btn-quiet wide file-btn">Import backup <input type="file" id="import" accept="application/json" hidden></label>
+    <p class="hint" id="backup-msg"></p>
+  </section>
+  <section class="settings">
+    <h2>About the analysis</h2>
+    <p class="hint">Each decision is compared with the best estimated option at that moment: fold, check or call, and a few raise sizes. The estimates use the bot's equity tables and a simple model of how often opponents fold. They flag clear mistakes well and should not be read as solver-exact. Hindsight lines use cards you could not see and never change the score.</p>
+    <p class="hint" id="offline-status"></p>
+  </section>
+</main>
+
+<nav class="tabs" id="tabs" hidden>
+  <button type="button" data-page="play" aria-current="page">Play</button>
+  <button type="button" data-page="sessions">Sessions</button>
+  <button type="button" data-page="home">Home games</button>
+  <button type="button" data-page="more">More</button>
+</nav>
+
+<script src="db.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+<script src="pages.js"></script>
+</body>
+</html>

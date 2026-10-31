@@ -19,7 +19,8 @@ def new_game(opts):
     global _game
     o = json.loads(opts)
     _game = GameSession(mode=o.get("mode", "heads-up"), opponents=o.get("opponents"), seed=o.get("seed"),
-                        stack=o.get("stack") or 2000, reveal=o.get("reveal", True))
+                        stack=o.get("stack") or 2000, reveal=o.get("reveal", True),
+                        players=o.get("players"), with_bot=o.get("with_bot", True))
     return json.dumps({"meta": _game.meta(), "events": _game.start()})
 
 def act(kind, amount):

@@ -6,18 +6,6 @@ const fmt = (n) => Number(n).toLocaleString("en-US");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SUITS = { c: "♣", d: "♦", h: "♥", s: "♠" };
 const STREETS = ["Preflop", "Flop", "Turn", "River"];
-const BOT_CHOICES = [
-  ["nolimit", "Bot", "the competition bot"],
-  ["maniac", "maniac", "raises everything"],
-  ["tag", "tag", "tight-aggressive"],
-  ["nit", "nit", "very tight"],
-  ["pusher", "pusher", "shoves or folds"],
-  ["station", "station", "calls everything"],
-  ["random", "random", "random moves"],
-  ["loose-passive", "loose-passive", "plays most hands"],
-  ["erratic", "erratic", "changes style"],
-  ["keating", "keating", "loose and unpredictable"],
-];
 const store = {
   get(k, d = null) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
@@ -32,7 +20,6 @@ const settings = {
 
 let engine = null;     // Engine (worker bridge)
 let G = null;          // current game
-let picked = [];       // lobby: chosen opponents
 let currentPage = "play";
 
 // ------------------------------------------------------------------ helpers
@@ -88,53 +75,17 @@ function scoreBadge(score, label) {
 
 // ------------------------------------------------------------------ lobby
 function buildLobby() {
-  const chips = $("bot-chips");
-  chips.innerHTML = "";
-  for (const [key, label, desc] of BOT_CHOICES) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = label;
-    b.title = desc;
-    b.setAttribute("aria-label", `Add ${label}: ${desc}`);
-    b.onclick = () => { if (picked.length < 7) { picked.push(key); renderPicked(); } };
-    chips.appendChild(b);
-  }
-  renderPicked();
   document.querySelectorAll(".choice[data-mode]").forEach((b) => {
     b.onclick = () => startGame({ mode: b.dataset.mode });
   });
   $("custom-start").onclick = () => {
     const seed = $("seed").value.trim();
     const stack = $("stack").value.trim();
-    const body = { mode: picked.length === 1 ? "heads-up" : "table", stack: Number(stack) || 2000 };
-    if (picked.length) body.opponents = picked.slice();
+    const body = { mode: "custom", players: Number($("n-opp").value), with_bot: $("with-bot").checked,
+                   stack: Number(stack) || 2000 };
     if (seed) body.seed = Number(seed);
     startGame(body);
   };
-}
-
-function renderPicked() {
-  const box = $("picked");
-  box.innerHTML = "";
-  if (!picked.length) {
-    box.innerHTML = `<span class="hint" style="margin:0">No players picked: the defaults are used.</span>`;
-    return;
-  }
-  picked.forEach((key, i) => {
-    const label = (BOT_CHOICES.find((b) => b[0] === key) || [key, key])[1];
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label + " ✕";
-    b.setAttribute("aria-label", `Remove ${label}`);
-    b.onclick = () => { picked.splice(i, 1); renderPicked(); };
-    box.appendChild(b);
-  });
-  const n = document.createElement("span");
-  n.className = "hint";
-  n.style.margin = "4px 0 0";
-  n.textContent = `${picked.length + 1} players with you`;
-  box.appendChild(n);
 }
 
 async function checkResume() {
@@ -331,7 +282,7 @@ async function saveHand(ev, game, replay) {
   const a = ev.analysis;
   s.hands.push({
     n: ev.hand, hole: game.hole, board: ev.board, deltas: ev.deltas, all_cards: ev.all_cards, all_rank: ev.all_rank,
-    shown: ev.shown, record: ev.record, analysis: a, score: a ? a.score : null, label: a ? a.label : null,
+    shown: ev.shown, record: ev.record, analysis: a, lines: ev.lines || {}, bluffs_faced: ev.bluffs_faced || [], score: a ? a.score : null, label: a ? a.label : null,
     bb: game.bb, players: game.playersLeft + ev.busted.length, busted: ev.busted,
   });
   const scored = s.hands.filter((h) => h.score !== null && h.score !== undefined);
@@ -364,7 +315,7 @@ function buildSeats() {
     if (s === G.hero) continue;
     const p = seatPos(s);
     const el = document.createElement("div");
-    el.className = "seat" + (G.names[s] === "Bot" ? " is-bot" : "");
+    el.className = "seat";
     el.style.left = `clamp(40px, ${p.x}%, calc(100% - 40px))`;
     el.style.top = p.y + "%";
     if (p.x > 55) el.classList.add("right");
@@ -631,7 +582,7 @@ function setupControls() {
   document.addEventListener("click", (e) => {
     if (!$("menu").hidden && !e.target.closest("#menu") && e.target.id !== "menu-btn") $("menu").hidden = true;
   });
-  $("rematch").onclick = () => G && startGame({ mode: G.options.mode, opponents: G.options.opponents, seed: G.options.seed, stack: G.options.stack });
+  $("rematch").onclick = () => G && startGame({ ...G.options });
   $("to-lobby").onclick = goLobby;
   $("review-session").onclick = () => { if (G && G.session) Pages.openSession(G.session.id); };
   document.querySelectorAll("#tabs button").forEach((b) => {
@@ -671,6 +622,11 @@ function renderPlayersTable(ev, game, names, hero) {
     if (folded) li.classList.add("folded");
     const nm = document.createElement("span");
     nm.innerHTML = esc(s === hero ? "You" : names[s]) + (ranks && ranks[s] ? ` <span class="rk">${ranks[s]}${folded ? ", folded" : ""}</span>` : (folded ? ` <span class="rk">folded</span>` : ""));
+    const line = ev.lines && ev.lines[s];
+    if (line && line.label !== "thin") {
+      const word = line.label === "value" ? "for value" : line.label === "semi-bluff" ? "semi-bluff" : "bluff";
+      nm.innerHTML += ` <span class="line-tag ${line.label}">${line.verb} ${line.street}: ${word}</span>`;
+    }
     const d = document.createElement("span");
     d.className = "delta " + (deltas[s] > 0 ? "up" : deltas[s] < 0 ? "down" : "");
     d.textContent = deltas[s] > 0 ? "+" + fmt(deltas[s]) : deltas[s] < 0 ? "−" + fmt(-deltas[s]) : "0";
@@ -731,6 +687,16 @@ function showResult(ev, game) {
       p.textContent = `${list} ${who.length === 1 && who[0] !== "You" ? "is" : "are"} out.`;
       body.appendChild(p);
     }
+    if (ev.bluffs_faced && ev.bluffs_faced.length) {
+      const p = document.createElement("p");
+      p.className = "bluff-note";
+      p.textContent = ev.bluffs_faced.map((b) => {
+        const what = b.label === "semi-bluff" ? "semi-bluffed" : "bluffed";
+        const you = b.response === "fold" ? "you folded" : b.response === "call" ? "you called" : "you raised";
+        return `${game.names[b.seat]} ${what} the ${b.street}; ${you}.`;
+      }).join(" ");
+      body.appendChild(p);
+    }
     if (game.handActed || ev.analysis) body.appendChild(renderAnalysis(ev.analysis));
     const sheet = $("result");
     sheet.hidden = false;
@@ -787,8 +753,28 @@ async function finishGame(ev, game) {
     li.innerHTML = `<span class="pl">${r.place}</span><span>${r.s === game.hero ? "You" : esc(game.names[r.s])}</span><span class="pts">${pts} pts</span>`;
     list.appendChild(li);
   }
+  renderWho(ev.who || [], game);
+  if (game.session) { game.session.who = ev.who || []; await DB.put("sessions", game.session); }
   if (!game.replaying) { await sleep(fast(ev) ? 0 : 600); }
   show("standings");
+}
+
+function whoLine(w) {
+  const style = w.style.charAt(0).toUpperCase() + w.style.slice(1);
+  const post = w.bets ? ` Bet or raised ${w.bets} time${w.bets === 1 ? "" : "s"} after the flop; ${w.bluffs === 1 ? "1 of those hands was a bluff or semi-bluff" : `${w.bluffs} of those hands were bluffs or semi-bluffs`}.` : "";
+  return `${style}. Played ${w.vpip}% of ${w.hands} hands and raised ${w.pfr}% preflop.${post}`;
+}
+
+function renderWho(who, game) {
+  const list = $("who-list");
+  list.innerHTML = "";
+  $("who").hidden = !who.length;
+  for (const w of who) {
+    const li = document.createElement("li");
+    if (w.bot) li.className = "is-bot";
+    li.innerHTML = `<span class="who-name">${esc(w.name)}${w.bot ? ` <span class="badge bot-badge">bot</span>` : ""}</span><span class="who-style">${esc(whoLine(w))}</span>`;
+    list.appendChild(li);
+  }
 }
 
 function labelOf(score) {
@@ -821,7 +807,6 @@ async function boot() {
       document.querySelector("#lobby .lobby-head p").textContent =
         "Practice against bots under the regional rules: 2,000 chips, blinds from 10/20, rising every 25 hands. " +
         "Every hand you play is scored and saved. This public version uses a stand-in for the competition bot.";
-      BOT_CHOICES[0][2] = "stand-in for the competition bot";
     }
   } catch (e) { /* older bundle: full edition */ }
   buildLobby();

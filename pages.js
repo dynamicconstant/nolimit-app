@@ -39,7 +39,7 @@ const Pages = (() => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "row";
-      const mode = s.options.mode === "table" ? "Full table" : s.options.mode === "maniac" ? "vs maniac" : s.options.opponents ? `${s.names.length} players` : "Heads-up";
+      const mode = modeName(s);
       const res = s.result ? `finished ${ordinal(s.result.place)} of ${s.result.players} · ${Math.round(s.result.points)} pts` : s.status === "live" ? "in progress" : "unfinished";
       b.innerHTML = `<div class="row-main"><div class="row-title">${mode} <span class="muted">· ${dateStr(s.startedAt)}</span></div>
         <div class="row-sub">${res} · ${s.handsPlayed || s.hands.length} hands</div></div>
@@ -54,7 +54,7 @@ const Pages = (() => {
     if (!s) return renderSessions();
     show("session");
     backTo = "sessions";
-    const mode = s.options.mode === "table" ? "Full table" : s.options.mode === "maniac" ? "vs maniac" : "Heads-up";
+    const mode = modeName(s);
     $("session-title").textContent = `${mode} · ${dateStr(s.startedAt)}`;
     $("session-sub").textContent = s.result ? `You finished ${ordinal(s.result.place)} of ${s.result.players} after ${s.result.hands} hands.` : s.status === "live" ? "In progress." : "Not finished.";
     const scored = s.hands.filter((h) => h.score !== null && h.score !== undefined);
@@ -69,6 +69,8 @@ const Pages = (() => {
         <div class="tile"><span class="tile-v">${counts.mistake + counts.blunder}</span><span class="tile-l">mistakes</span></div>
         <div class="tile"><span class="tile-v ${s.net > 0 ? "up" : s.net < 0 ? "down" : ""}">${s.net > 0 ? "+" : ""}${fmt(s.net || 0)}</span><span class="tile-l">chips</span></div>
       </div>
+      ${bluffSummary(s)}
+      ${whoSummary(s)}
       ${worst.length && worst[0].label !== "optimal" ? `<h2>Biggest leaks</h2><ul class="leaks">${worst.filter((d) => d.label !== "optimal").map((d) => `<li><b>Hand ${d.n}, ${d.street}</b> (${esc(d.situation)}): you ${esc(d.chosen.toLowerCase())}, best was ${esc(d.best.toLowerCase())}. ${scoreBadge(d.score, d.label)}</li>`).join("")}</ul>` : ""}
       <h2>Hands</h2>`;
     const box = $("session-hands");
@@ -92,6 +94,35 @@ const Pages = (() => {
     $("session-back").onclick = renderSessions;
   }
 
+  function modeName(s) {
+    const m = s.options.mode;
+    if (m === "table") return "Full table";
+    if (m === "heads-up" && !s.options.opponents) return "Heads-up vs the bot";
+    if (m === "stranger" || m === "maniac" || m === "bluffer") return "Heads-up vs a stranger";
+    return `${s.names.length} players`;
+  }
+
+  function whoSummary(s) {
+    if (!s.who || !s.who.length) return "";
+    return `<h2>Who was who</h2><ul class="who-inline">${s.who.map((w) =>
+      `<li><b>${esc(w.name)}</b>${w.bot ? ` <span class="badge bot-badge">bot</span>` : ""}: ${esc(whoLine(w))}</li>`).join("")}</ul>`;
+  }
+
+  function bluffSummary(s) {
+    const faced = s.hands.flatMap((h) => h.bluffs_faced || []);
+    if (!faced.length) return "";
+    const folded = faced.filter((b) => b.response === "fold").length;
+    const called = faced.filter((b) => b.response === "call").length;
+    const raised = faced.length - folded - called;
+    const by = {};
+    for (const b of faced) by[s.names[b.seat]] = (by[s.names[b.seat]] || 0) + 1;
+    const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
+    return `<h2>Bluffs you faced</h2>
+      <p class="bluff-note">Opponents bluffed or semi-bluffed you ${faced.length} time${faced.length === 1 ? "" : "s"}: you folded ${folded}, called ${called}${raised ? `, raised ${raised}` : ""}.
+      ${top ? `${esc(top[0])} bluffed you most (${top[1]}).` : ""}
+      ${folded > called + raised && faced.length >= 4 ? "You're folding to most bluffs. Against the players who bluffed you most, call down a little lighter when the pot odds are close." : ""}</p>`;
+  }
+
   function openHand(s, h) {
     show("handview");
     $("hand-title").textContent = `Hand ${h.n}`;
@@ -100,7 +131,7 @@ const Pages = (() => {
     const d = h.deltas[s.hero];
     $("hand-sub").textContent = d > 0 ? `You won ${fmt(d)}` : d < 0 ? `You lost ${fmt(-d)}` : "No chips changed hands for you";
     $("hand-body").innerHTML = "";
-    $("hand-body").appendChild(renderHandReplay(h.record, s.names, s.hero, { all_cards: h.all_cards, all_rank: h.all_rank, deltas: h.deltas, shown: h.shown, board: h.board }, h.analysis));
+    $("hand-body").appendChild(renderHandReplay(h.record, s.names, s.hero, { all_cards: h.all_cards, all_rank: h.all_rank, deltas: h.deltas, shown: h.shown, board: h.board, lines: h.lines }, h.analysis));
   }
 
   function renderHandReplay(rec, names, hero, end, analysis) {
@@ -154,7 +185,7 @@ const Pages = (() => {
       const h2 = document.createElement("h2");
       h2.textContent = "Everyone's cards";
       wrap.appendChild(h2);
-      wrap.appendChild(renderPlayersTable({ deltas: end.deltas, all_cards: end.all_cards || end.shown, all_rank: end.all_rank || {}, shown: end.shown || {}, shown_rank: {}, record: rec }, { reveal: true }, names, hero));
+      wrap.appendChild(renderPlayersTable({ deltas: end.deltas, all_cards: end.all_cards || end.shown, all_rank: end.all_rank || {}, shown: end.shown || {}, shown_rank: {}, record: rec, lines: end.lines || {} }, { reveal: true }, names, hero));
     }
     wrap.appendChild(renderAnalysis(analysis));
     return wrap;

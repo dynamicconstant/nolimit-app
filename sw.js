@@ -1,5 +1,5 @@
 // Service worker: caches the whole app (including the Python runtime) so it opens with no network.
-const CACHE = "nolimit-35488bdd75";
+const CACHE = "nolimit-f4632c6582";
 const FILES = ['index.html', 'app.js', 'pages.js', 'db.js', 'style.css', 'engine.js', 'engine-worker.js', 'py.zip', 'manifest.json', 'icon.svg', 'pyodide/pyodide.js', 'pyodide/pyodide.asm.js', 'pyodide/pyodide.asm.wasm', 'pyodide/python_stdlib.zip', 'pyodide/pyodide-lock.json', './'];
 
 self.addEventListener("install", (e) => {

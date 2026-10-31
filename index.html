@@ -43,29 +43,36 @@
 
   <div class="choices">
     <button class="choice" type="button" data-mode="heads-up">
-      <span class="choice-title">Heads-up</span>
-      <span class="choice-sub">You against the bot, one on one</span>
+      <span class="choice-title">Heads-up vs the bot</span>
+      <span class="choice-sub">You against the competition bot, one on one</span>
     </button>
     <button class="choice" type="button" data-mode="table">
       <span class="choice-title">Full table</span>
-      <span class="choice-sub">You, the bot, a maniac and five practice bots</span>
+      <span class="choice-sub">You, the competition bot and six other players. You won't know which one is the bot until the game ends.</span>
     </button>
-    <button class="choice choice-maniac" type="button" data-mode="maniac">
-      <span class="choice-title">Maniac</span>
-      <span class="choice-sub">Heads-up against a bot that raises everything</span>
+    <button class="choice" type="button" data-mode="stranger">
+      <span class="choice-title">Heads-up vs a stranger</span>
+      <span class="choice-sub">One player with a personality of their own. Work out how they play.</span>
     </button>
   </div>
 
   <details class="advanced">
-    <summary>Choose opponents, seed and stack</summary>
-    <p class="hint">Tap to add a player to your table (up to 7). Leave empty to use the defaults.</p>
-    <div class="chips" id="bot-chips"></div>
-    <div class="picked" id="picked" aria-live="polite"></div>
+    <summary>Table size, seed and stack</summary>
+    <p class="hint">Every player draws a new personality each game, and it shifts as the game goes on. At the end you see who was who.</p>
     <div class="fields">
-      <label>Seed <input id="seed" inputmode="numeric" pattern="[0-9]*" placeholder="random"></label>
+      <label>Opponents
+        <select id="n-opp">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option>
+        </select>
+      </label>
       <label>Starting stack <input id="stack" inputmode="numeric" pattern="[0-9]*" value="2000"></label>
     </div>
-    <button class="btn-brass wide" id="custom-start" type="button">Start with these players</button>
+    <label class="toggle"><input type="checkbox" id="with-bot" checked> Include the competition bot</label>
+    <div class="fields">
+      <label>Seed <input id="seed" inputmode="numeric" pattern="[0-9]*" placeholder="random"></label>
+    </div>
+    <button class="btn-brass wide" id="custom-start" type="button">Start</button>
   </details>
   <p class="lobby-error" id="lobby-error" role="alert"></p>
 </main>
@@ -143,6 +150,10 @@
   </header>
   <div class="session-score" id="session-score"></div>
   <ol class="places" id="places"></ol>
+  <section class="who" id="who" hidden>
+    <h2>Who was who</h2>
+    <ul id="who-list"></ul>
+  </section>
   <div class="end-actions">
     <button class="btn-brass wide" id="review-session" type="button">Review this session</button>
     <button class="btn-quiet wide" id="rematch" type="button">Play again with the same cards</button>
